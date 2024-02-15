@@ -36,6 +36,7 @@ import jax
 from jax import random
 import jax.numpy as jnp
 import numpy as np
+import wandb
 
 configs.define_common_flags()
 jax.config.parse_flags_with_absl()
@@ -43,6 +44,7 @@ jax.config.parse_flags_with_absl()
 
 def main(unused_argv):
   config = configs.load_config(save_config=False)
+  run = wandb.init(project='radiance-field-qa', name="mip-nerf", id="84vd4v9g", config=config, resume="allow")
 
   dataset = datasets.load_dataset('test', config.data_dir, config)
 
@@ -190,16 +192,22 @@ def main(unused_argv):
     if (not config.eval_only_once) and (jax.host_id() == 0):
       summary_writer.scalar('eval_median_render_time', np.median(render_times),
                             step)
+      wandb.log({ f'Test Metrics Dict/median_render_time': np.median(render_times) }, step=step+2)
       for name in metrics[0]:
         scores = [m[name] for m in metrics]
         summary_writer.scalar('eval_metrics/' + name, np.mean(scores), step)
+        print(f'Test Metrics Dict/{name}')
+        wandb.log({ f'Test Metrics Dict/{name}': np.mean(scores) }, step=step+2)
         summary_writer.histogram('eval_metrics/' + 'perimage_' + name, scores,
                                  step)
+        wandb.log({ f'Test Metrics Dict/perimage_{name}': wandb.Histogram(np.array(scores)) }, step=step+2)
       for name in metrics_cc[0]:
         scores = [m[name] for m in metrics_cc]
         summary_writer.scalar('eval_metrics_cc/' + name, np.mean(scores), step)
+        wandb.log({ f'Test Metrics Dict/{name}_cc': np.mean(scores) }, step=step+2)
         summary_writer.histogram('eval_metrics_cc/' + 'perimage_' + name,
                                  scores, step)
+        wandb.log({ f'Test Metrics Dict/perimage_{name}_cc': wandb.Histogram(np.array(scores)) }, step=step+2)
 
       for i, r, b in showcases:
         if config.vis_decimate > 1:
@@ -214,15 +222,21 @@ def main(unused_argv):
           if k == 'color':
             v = postprocess_fn(v)
           summary_writer.image(f'output_{k}_{i}', v, step)
+          print(f'Test Images/output_{k}_{i}')
+          wandb.log({ f'Test Images/output_{k}_{i}': wandb.Image(np.array(v)) }, step=step+2)
         if not config.render_path:
           target = postprocess_fn(b.rgb)
           summary_writer.image(f'true_color_{i}', target, step)
+          wandb.log({ f'Test Images/true_color_{i}': wandb.Image(np.array(target)) }, step=step+2)
           pred = postprocess_fn(visualizations['color'])
           residual = np.clip(pred - target + 0.5, 0, 1)
           summary_writer.image(f'true_residual_{i}', residual, step)
+          wandb.log({ f'Test Images/true_residual_{i}': wandb.Image(np.array(residual)) }, step=step+2)
           if config.compute_normal_metrics:
-            summary_writer.image(f'true_normals_{i}', b.normals / 2. + 0.5,
+            normals = b.normals / 2. + 0.5
+            summary_writer.image(f'true_normals_{i}', normals,
                                  step)
+            wandb.log({ f'Test Images/true_normals_{i}': wandb.Image(np.array(normals)) }, step=step+2)
 
     if (config.eval_save_output and (not config.render_path) and
         (jax.host_id() == 0)):

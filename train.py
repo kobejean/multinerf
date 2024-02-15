@@ -34,6 +34,7 @@ import jax
 from jax import random
 import jax.numpy as jnp
 import numpy as np
+import wandb
 
 configs.define_common_flags()
 jax.config.parse_flags_with_absl()
@@ -48,6 +49,8 @@ def main(unused_argv):
   np.random.seed(20201473 + jax.host_id())
 
   config = configs.load_config()
+
+  run = wandb.init(project='radiance-field-qa', name="mip-nerf", config=config)
 
   if config.batch_size % jax.device_count() != 0:
     raise ValueError('Batch size must be divisible by the number of devices.')
@@ -177,8 +180,17 @@ def main(unused_argv):
         # Summarize the mean and max of each statistic.
         for k, v in avg_stats.items():
           summ_fn(f'train_avg_{k}', v)
+          wandb.log({ f'Train Metrics Dict/avg_{k}': v }, step=step)
         for k, v in max_stats.items():
           summ_fn(f'train_max_{k}', v)
+          wandb.log({ f'Train Metrics Dict/max_{k}': v }, step=step)
+
+        wandb.log({ 
+          'Train Metrics Dict/num_params': num_params,
+          'Train Metrics Dict/learning_rate': learning_rate,
+          'Train Metrics Dict/steps_per_sec': steps_per_sec,
+          'Train Metrics Dict/rays_per_sec': rays_per_sec,
+        }, step=step)
 
         summ_fn('train_num_params', num_params)
         summ_fn('train_learning_rate', learning_rate)
@@ -240,6 +252,7 @@ def main(unused_argv):
         num_rays = jnp.prod(jnp.array(test_case.rays.directions.shape[:-1]))
         rays_per_sec = num_rays / eval_time
         summary_writer.scalar('test_rays_per_sec', rays_per_sec, step)
+        wandb.log({ f'Eval Images Metrics/rays_per_sec': rays_per_sec }, step=step)
         print(f'Eval {step}: {eval_time:0.3f}s., {rays_per_sec:0.0f} rays/sec')
 
         metric_start_time = time.time()
@@ -250,6 +263,7 @@ def main(unused_argv):
           if not np.isnan(val):
             print(f'{name} = {val:.4f}')
             summary_writer.scalar('train_metrics/' + name, val, step)
+            wandb.log({ f'Eval Images Metrics/{name}': val }, step=step)
 
         if config.vis_decimate > 1:
           d = config.vis_decimate
@@ -264,8 +278,10 @@ def main(unused_argv):
         if config.rawnerf_mode:
           # Unprocess raw output.
           vis_suite['color_raw'] = rendering['rgb']
+          wandb.log({ f'Eval Images/rgb': wandb.Image(np.array(rendering['rgb'])) }, step=step)
           # Autoexposed colors.
           vis_suite['color_auto'] = postprocess_fn(rendering['rgb'], None)
+          wandb.log({ f'Eval Images/rgb_auto': wandb.Image(np.array(postprocess_fn(rendering['rgb'])), None) }, step=step)
           summary_writer.image('test_true_auto',
                                postprocess_fn(test_case.rgb, None), step)
           # Exposure sweep colors.
@@ -280,6 +296,9 @@ def main(unused_argv):
                                test_case.normals / 2. + 0.5, step)
         for k, v in vis_suite.items():
           summary_writer.image('test_output_' + k, v, step)
+          np_arr=np.array(v)
+          print("Shape", np_arr.shape)
+          wandb.log({ f'Eval Images/{k}': wandb.Image(np_arr) }, step=step)
 
   if jax.host_id() == 0 and config.max_steps % config.checkpoint_every != 0:
     state = jax.device_get(flax.jax_utils.unreplicate(state))

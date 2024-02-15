@@ -1,4 +1,5 @@
 # A short training schedule with no "warm up", useful for debugging.
+Config.dataset_loader = 'blender'
 Config.checkpoint_every = 1000
 Config.print_every = 100
 Config.train_render_every = 1000

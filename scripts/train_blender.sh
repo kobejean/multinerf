@@ -15,13 +15,19 @@
 
 export CUDA_VISIBLE_DEVICES=0
 
-SCENE=ficus
+SCENE=lego
 EXPERIMENT=blender
-DATA_DIR=/usr/local/google/home/barron/tmp/nerf_data/nerf_synthetic
-CHECKPOINT_DIR=/usr/local/google/home/barron/tmp/nerf_results/"$EXPERIMENT"/"$SCENE"
+DATA_DIR=/home/ccl/Datasets/NeRF/blender
+CHECKPOINT_DIR=/home/ccl/Code/multinerf/outputs/"$EXPERIMENT"/"$SCENE"
 
-rm "$CHECKPOINT_DIR"/*
-python -m train \
+# rm "$CHECKPOINT_DIR"/*
+# python -m train \
+#   --gin_configs=configs/blender_256.gin \
+#   --gin_bindings="Config.data_dir = '${DATA_DIR}/${SCENE}'" \
+#   --gin_bindings="Config.checkpoint_dir = '${CHECKPOINT_DIR}'" \
+#   --logtostderr
+
+python -m eval \
   --gin_configs=configs/blender_256.gin \
   --gin_bindings="Config.data_dir = '${DATA_DIR}/${SCENE}'" \
   --gin_bindings="Config.checkpoint_dir = '${CHECKPOINT_DIR}'" \

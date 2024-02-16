@@ -37,6 +37,7 @@ from jax import random
 import jax.numpy as jnp
 import numpy as np
 import wandb
+from flax import traverse_util
 
 configs.define_common_flags()
 jax.config.parse_flags_with_absl()
@@ -86,6 +87,20 @@ def main(unused_argv):
     key = random.PRNGKey(0 if config.deterministic_showcase else step)
     perm = random.permutation(key, num_eval)
     showcase_indices = np.sort(perm[:config.num_showcase_images])
+
+
+    def get_model_size(state):
+      data_size = 0
+      flat_params = traverse_util.flatten_dict(state.params)
+      for name, param in flat_params.items():
+          is_blacklisted = "lpips" in name
+          if not is_blacklisted:
+              size_in_bytes = np.prod(param.shape) * param.dtype.itemsize
+              data_size += size_in_bytes
+      return data_size
+    model_size = get_model_size(state)
+    print(f'Test Metrics Dict/model_size', model_size)
+    wandb.log({ f'Test Metrics Dict/model_size': model_size }, step=step)
 
     metrics = []
     metrics_cc = []
